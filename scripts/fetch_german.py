@@ -1,6 +1,7 @@
 """UCI에서 German Credit(Statlog)을 받아 data/german.csv로 저장한다. 표준 라이브러리만 쓴다.
 
-    python scripts/fetch_german.py
+    python scripts/fetch_german.py                      # UCI에서 받는다
+    python scripts/fetch_german.py 받은폴더/german.data   # 이미 받은 파일을 바꾼다
 """
 import io
 import sys
@@ -14,8 +15,11 @@ from probatio.data import parse_german  # noqa: E402
 URL = "https://archive.ics.uci.edu/static/public/144/statlog+german+credit+data.zip"
 
 if __name__ == "__main__":
-    raw = urllib.request.urlopen(URL, timeout=60).read()
-    text = zipfile.ZipFile(io.BytesIO(raw)).read("german.data").decode("ascii")
+    if len(sys.argv) > 1:
+        text = Path(sys.argv[1]).read_text(encoding="ascii")
+    else:
+        raw = urllib.request.urlopen(URL, timeout=60).read()
+        text = zipfile.ZipFile(io.BytesIO(raw)).read("german.data").decode("ascii")
     df = parse_german(text)
     out = Path(__file__).resolve().parents[1] / "data" / "german.csv"
     df.to_csv(out, index=False)
