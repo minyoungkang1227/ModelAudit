@@ -22,6 +22,8 @@ class Setup:
     categorical: str = "housing"
     category: str = "rent"
     approve_share: float = 0.7
+    use: str = "개인 신용평가·대출 심사"
+    high_impact: bool = True            # 대출 심사는 위험점수와 무관하게 고위험으로 분류되는 용도다
     ref_share: float = 0.6
 
     def member(self, X: pd.DataFrame):

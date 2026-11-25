@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from modelaudit import data, drift, fairness, planted, report, samples
+from modelaudit import data, drift, fairness, perf, planted, report, samples
 from modelaudit.__main__ import main
 
 
@@ -94,7 +94,7 @@ def test_report_and_commands_run_end_to_end(tmp_path):
     assert main(["report", "--data", str(tmp_path / "d.csv"), "--out", str(tmp_path)]) == 0
     assert main(["planted", "--data", str(tmp_path / "d.csv"), "--out", str(tmp_path), "--seeds", "2"]) == 0
     text = (tmp_path / "report.md").read_text(encoding="utf-8")
-    assert "신뢰성" in text and "바꿔 넣기" in text
+    assert "신뢰성" in text and "바꿔 넣기" in text and "고위험" in text and "설명가능성 | 검사 안 함" in text
     assert "간접 차별" in (tmp_path / "planted.md").read_text(encoding="utf-8")
     assert report.overall(["통과", "실패", "주의"]) == "실패"
 
@@ -126,3 +126,30 @@ def test_benchmark_model_runs_with_missing_values():
     X, y = df.drop(columns=["credit_risk"]), df["credit_risk"]
     assert samples.train_benchmark(X, y, exclude=("age",))(X).shape == (400,)
     assert samples.train(X, y, exclude=("age",))(X).shape == (400,)
+
+
+def test_risk_grade_follows_published_bands_and_high_impact_rule():
+    assert report.grade(10, False)[0] == "저위험"
+    assert report.grade(25, False)[0] == "중위험"
+    assert report.grade(50, False)[0] == "고위험"
+    assert report.grade(80, False)[0] == "초고위험"
+    assert report.grade(10, True)[0] == "고위험"        # 고영향 AI는 점수가 낮아도 고위험
+    assert report.grade(80, True)[0] == "초고위험"
+    assert report.grade(None, True)[0] == "고위험"
+    assert report.grade(None, False)[0] == "산정 안 함"
+
+
+def test_unchecked_area_is_shown_and_never_counted_as_pass():
+    assert report.overall(["검사 안 함", "통과"]) == "통과"
+    assert report.overall(["검사 안 함"]) == "검사 안 함"
+    text = report.build("x", [], [])
+    assert "검사하지 않은 영역: 모델 성능 관리, 데이터 품질, 공정성·편향성, 설명가능성" in text
+
+
+def test_performance_drop_is_flagged_only_when_real():
+    rng = np.random.default_rng(7)
+    y = rng.integers(0, 2, 4000)
+    good = y + rng.normal(0, 0.8, 4000)
+    assert perf.check(y[:2000], good[:2000], y[2000:], good[2000:], n_boot=100).status == "통과"
+    worse = y[2000:] + rng.normal(0, 2.5, 2000)
+    assert perf.check(y[:2000], good[:2000], y[2000:], worse, n_boot=100).status == "실패"
