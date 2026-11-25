@@ -15,6 +15,7 @@ class Setup:
     label: str = "credit_risk"          # 1 = 우량
     group_column: str = "age"
     group_edge: float = 25              # 이 값 이하를 한 집단으로 본다
+    group_value: str | None = None      # 적으면 숫자 기준 대신 '이 값인 사람'을 한 집단으로 본다
     flip_values: tuple = (22, 40)       # 바꿔 넣기에 쓰는 두 값
     exclude: tuple = ("age", "personal_status_sex", "foreign_worker")   # 표본 모델에 넣지 않는 보호 속성
     numeric: str = "amount"
@@ -24,10 +25,22 @@ class Setup:
     ref_share: float = 0.6
 
     def member(self, X: pd.DataFrame):
+        if self.group_value is not None:
+            return X[self.group_column] == self.group_value
         return X[self.group_column] <= self.group_edge
 
     def group(self, X: pd.DataFrame):
+        if self.group_value is not None:
+            return np.where(self.member(X), self.group_value, f"{self.group_value} 아님")
         return np.where(self.member(X), f"{self.group_edge:g} 이하", f"{self.group_edge:g} 초과")
+
+
+HOME = dict(exclude=("age", "gender"), numeric="AMT_CREDIT", categorical="NAME_HOUSING_TYPE", category="Rented apartment")
+PRESETS = {
+    "german": Setup(),
+    "home-age": Setup(**HOME),                                                            # 25세 이하
+    "home-gender": Setup(group_column="gender", group_value="M", flip_values=("M", "F"), **HOME),   # 남성
+}
 
 
 def _split(df: pd.DataFrame, share: float, rng):

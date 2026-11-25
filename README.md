@@ -24,6 +24,11 @@ LLM 점검은 [Collatio](https://github.com/minyoungkang1227/collatio)가 맡고
 - **간접 차별은 아직 가려내지 못한다.** 아무것도 심지 않은 모델도 30번 중 13번 걸린다. 이 자료에서 25세 이하의 실제 우량 비율이 낮아서(58% 대 73%) 승인율이 원래 갈리기 때문이다. 심은 차별과 자료에 원래 있던 차이를 결과만 보고는 나눌 수 없다.
 - 새 표본이 100건이면 PSI 관행 기준(0.10)은 아무 변화가 없어도 95%에서 경고를 낸다. 우연으로 나올 크기인지 함께 보면 7%로 줄지만, 진짜 변화를 잡는 힘도 같이 떨어진다.
 
+건수가 많은 Home Credit(약 30만 건)에서 두 가지가 더 나왔다.
+
+- 표본이 크면 PSI 관행 기준이 반대로 틀린다. 금액 1.1배는 우연의 100배 크기인데도 통과로 나온다.
+- 표본이 크면 간접 차별이 갈린다. 아무것도 심지 않은 모델의 승인율 비는 0.47~0.50, 가장 약하게 심은 경우는 0.42~0.44로 겹치지 않는다. 다만 심지 않은 모델부터 25세 이하를 절반만 승인한다.
+
 ## 쓰는 법
 
 ```
@@ -31,6 +36,8 @@ pip install -e .
 python scripts/fetch_german.py                      # UCI에서 자료를 받아 data/german.csv로 저장
 python -m probatio report  --data data/german.csv   # 표본 모델 검증 보고서 -> runs/report.md
 python -m probatio planted --data data/german.csv   # 문제를 심고 잡는지 세기 -> runs/planted.md
+python scripts/prep_home_credit.py 받은폴더/application_train.csv
+python -m probatio planted --data data/home_credit.csv --preset home-age --seeds 10
 pytest
 ```
 

@@ -48,8 +48,9 @@ def main(argv=None):
     ap.add_argument("--data", required=True, help="정답 열이 있는 CSV")
     ap.add_argument("--out", default="runs")
     ap.add_argument("--seeds", type=int, default=30)
+    ap.add_argument("--preset", choices=sorted(planted.PRESETS), default="german", help="자료와 집단 설정")
     a = ap.parse_args(argv)
-    df, s = pd.read_csv(a.data), planted.Setup()
+    df, s = pd.read_csv(a.data), planted.PRESETS[a.preset]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     cmd_report(df, s, out) if a.command == "report" else cmd_planted(df, s, out, a.seeds)

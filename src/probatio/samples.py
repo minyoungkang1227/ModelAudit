@@ -7,6 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -20,7 +21,10 @@ def train(df: pd.DataFrame, y, exclude: tuple[str, ...] = ()) -> Model:
     num = [c for c in cols if pd.api.types.is_numeric_dtype(df[c])]
     cat = [c for c in cols if c not in num]
     pipe = make_pipeline(
-        ColumnTransformer([("n", StandardScaler(), num), ("c", OneHotEncoder(handle_unknown="ignore"), cat)]),
+        ColumnTransformer([   # 빈 값은 숫자는 중앙값, 범주는 '없음'이라는 값으로 채운다
+            ("n", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), num),
+            ("c", make_pipeline(SimpleImputer(strategy="constant", fill_value="없음"), OneHotEncoder(handle_unknown="ignore")), cat),
+        ]),
         LogisticRegression(max_iter=2000),
     )
     pipe.fit(df[cols], np.asarray(y))
