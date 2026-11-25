@@ -79,6 +79,8 @@ def fairness_trial(df: pd.DataFrame, s: Setup, seeds: int = 30,
         y_train, y_test = train[s.label].to_numpy(), test[s.label].to_numpy()
         Xtr, Xte = train.drop(columns=[s.label]), test.drop(columns=[s.label])
         base = samples.train(Xtr, y_train, s.exclude)
+        bench = samples.train_benchmark(Xtr, y_train, s.exclude)       # 검증자는 왜곡되지 않은 정답을 갖고 있다고 본다
+        bench_ok = bench(Xte) >= samples.cutoff_for(bench(Xtr), s.approve_share)
         cases = [("대조", "없음", base, base)]
         cases += [("직접 차별", d, samples.with_penalty(base, s.member, d), base) for d in deltas]
         for share in shares:
@@ -91,6 +93,7 @@ def fairness_trial(df: pd.DataFrame, s: Setup, seeds: int = 30,
                 "승인율 비": fairness.disparity(approved, s.group(Xte)).status,
                 "기회 격차": fairness.opportunity(approved, y_test, s.group(Xte)).status,
                 "바꿔 넣기": fairness.flip(model, Xte, s.group_column, *s.flip_values, cut).status,
+                "기준 모델 비교": fairness.versus(approved, bench_ok, s.member(Xte)).status,
             }
             for check, status in checks.items():
                 rows.append(dict(kind=kind, level=level, check=check, seed=seed, flagged=status != "통과", failed=status == "실패"))

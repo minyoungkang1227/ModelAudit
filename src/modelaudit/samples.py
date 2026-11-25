@@ -10,7 +10,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
 from .fairness import Model
 
@@ -27,6 +28,18 @@ def train(df: pd.DataFrame, y, exclude: tuple[str, ...] = ()) -> Model:
         ]),
         LogisticRegression(max_iter=2000),
     )
+    pipe.fit(df[cols], np.asarray(y))
+    return lambda X: pipe.predict_proba(X[cols])[:, 1]
+
+
+def train_benchmark(df: pd.DataFrame, y, exclude: tuple[str, ...] = ()) -> Model:
+    """검증자가 따로 세우는 기준 모델. 표본 모델과 종류가 다른 것(부스팅)을 써서 같은 모델끼리 비교가 되지 않게 한다."""
+    cols = [c for c in df.columns if c not in exclude]
+    cat = [c for c in cols if not pd.api.types.is_numeric_dtype(df[c])]
+    enc = ColumnTransformer([("c", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan), cat)],
+                            remainder="passthrough")
+    pipe = make_pipeline(enc, HistGradientBoostingClassifier(max_iter=100, learning_rate=0.1, random_state=0,
+                                                             categorical_features=list(range(len(cat)))))
     pipe.fit(df[cols], np.asarray(y))
     return lambda X: pipe.predict_proba(X[cols])[:, 1]
 

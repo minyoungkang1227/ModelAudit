@@ -1,5 +1,5 @@
 [project]
-name = "probatio"
+name = "modelaudit"
 version = "0.1.0"
 description = "금융 AI 모델 검증 툴킷: 모델 내부를 보지 않고 드리프트·공정성을 점검하고 보고서를 낸다"
 requires-python = ">=3.10"

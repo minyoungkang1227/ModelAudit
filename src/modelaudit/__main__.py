@@ -1,5 +1,5 @@
-"""python -m probatio report --data data/german.csv   : 표본 모델 하나를 점검해 보고서를 낸다
-python -m probatio planted --data data/german.csv  : 문제를 심고 몇 개를 잡는지 센다"""
+"""python -m modelaudit report --data data/german.csv   : 표본 모델 하나를 점검해 보고서를 낸다
+python -m modelaudit planted --data data/german.csv  : 문제를 심고 몇 개를 잡는지 센다"""
 from __future__ import annotations
 
 import argparse
@@ -22,6 +22,8 @@ def cmd_report(df, s, out):
     approved = model(Xc) >= cut
     fair = [fairness.disparity(approved, s.group(Xc)), fairness.opportunity(approved, cur[s.label], s.group(Xc)),
             fairness.flip(model, Xc, s.group_column, *s.flip_values, cut)]
+    bench = samples.train_benchmark(Xr, ref[s.label], s.exclude)
+    fair.append(fairness.versus(approved, bench(Xc) >= samples.cutoff_for(bench(Xr), s.approve_share), s.member(Xc)))
     notes = ["기준 표본과 새 표본은 같은 자료를 무작위로 나눈 것이다. 실제 시점 차이가 아니다.",
              "승인율 차이는 집단의 실제 부실률 차이에서도 생긴다. 기회 격차와 함께 읽는다.",
              f"표본 모델은 {', '.join(s.exclude)}를 입력으로 받지 않는다."]
@@ -43,7 +45,7 @@ def cmd_planted(df, s, out, seeds):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="probatio")
+    ap = argparse.ArgumentParser(prog="modelaudit")
     ap.add_argument("command", choices=["report", "planted"])
     ap.add_argument("--data", required=True, help="정답 열이 있는 CSV")
     ap.add_argument("--out", default="runs")

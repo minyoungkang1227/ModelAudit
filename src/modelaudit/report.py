@@ -5,7 +5,7 @@ import pandas as pd
 
 from . import drift, fairness
 
-ORDER = {"통과": 0, "주의": 1, "실패": 2}
+ORDER = {"통과": 0, "관찰": 1, "주의": 2, "실패": 3}
 
 # 점검 항목이 닿는 규제 항목. 출처는 docs/mapping.md에 적는다
 MAPPING = {
@@ -23,13 +23,15 @@ def build(title: str, drifts: list[drift.Drift], fair: list, notes: list[str] | 
     f_status = overall([f.status for f in fair])
     lines = [f"# 검증 보고서: {title}", "", "## 요약", "", "| 영역 | 판정 | 닿는 규제 항목 |", "|---|---|---|",
              f"| 드리프트 | {d_status} | {MAPPING['드리프트']} |", f"| 공정성 | {f_status} | {MAPPING['공정성']} |", ""]
-    lines += ["## 드리프트", "", "PSI 0.10 이상 주의, 0.25 이상 실패. 단, 우연으로 나올 수 있는 크기면 올리지 않는다(보정 p < 0.05).", "",
+    lines += ["## 드리프트", "", "PSI 0.10 이상 주의, 0.25 이상 실패. 우연으로 나올 수 있는 크기면 올리지 않는다(보정 p < 0.05). 우연은 아니지만 0.10 미만이면 관찰.", "",
               "| 변수 | PSI | 보정 p | 관행 판정 | 판정 |", "|---|---|---|---|---|"]
     for d in sorted(drifts, key=lambda r: -r.psi):
         lines.append(f"| {d.feature} | {d.psi:.3f} | {d.p_adjusted:.3f} | {d.status(False)} | {d.status()} |")
     lines += ["", "## 공정성", "", "| 점검 | 값 | 판정 |", "|---|---|---|"]
     for f in fair:
-        if isinstance(f, fairness.Disparity):
+        if isinstance(f, fairness.Versus):
+            lines.append(f"| 기준 모델 비교 | 집단 안 {f.in_group:+.1%}, 집단 밖 {f.out_group:+.1%}, 차이 {f.extra:+.1%}, p {f.p_value:.3f} (n={f.n_in}) | {f.status} |")
+        elif isinstance(f, fairness.Disparity):
             rates = ", ".join(f"{g} {r:.1%} (n={f.counts[g]})" for g, r in f.rates.items())
             lines.append(f"| {f.name} | 비 {f.ratio:.2f}, p {f.p_value:.3f}. {rates} | {f.status} |")
         else:

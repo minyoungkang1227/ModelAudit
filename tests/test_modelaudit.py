@@ -2,8 +2,8 @@
 import numpy as np
 import pandas as pd
 
-from probatio import data, drift, fairness, planted, report, samples
-from probatio.__main__ import main
+from modelaudit import data, drift, fairness, planted, report, samples
+from modelaudit.__main__ import main
 
 
 def fake(n=600, seed=0):
@@ -97,3 +97,32 @@ def test_report_and_commands_run_end_to_end(tmp_path):
     assert "신뢰성" in text and "바꿔 넣기" in text
     assert "간접 차별" in (tmp_path / "planted.md").read_text(encoding="utf-8")
     assert report.overall(["통과", "실패", "주의"]) == "실패"
+
+
+def test_significant_but_small_drift_is_reported_as_observation_not_pass():
+    rng = np.random.default_rng(5)
+    ref = pd.DataFrame({"x": rng.normal(0, 1, 60000)})
+    cur = pd.DataFrame({"x": rng.normal(0.12, 1, 60000)})
+    r = drift.check(ref, cur)[0]
+    assert r.psi < 0.10 and r.status(adjusted=False) == "통과" and r.status() == "관찰"
+    assert drift.check(ref, pd.DataFrame({"x": rng.normal(0, 1, 60000)}))[0].status() == "통과"
+
+
+def test_versus_isolates_what_the_audited_model_adds():
+    rng = np.random.default_rng(6)
+    n = 8000
+    member = rng.random(n) < 0.2
+    bench = rng.random(n) < np.where(member, 0.5, 0.7)        # 자료에 원래 있던 차이
+    same = bench.copy()
+    harsher = bench & ~(member & (rng.random(n) < 0.3))       # 집단에서만 승인의 30%를 더 거절
+    assert fairness.versus(same, bench, member).status == "통과"
+    v = fairness.versus(harsher, bench, member)
+    assert v.status == "실패" and v.extra < -0.1 and abs(v.out_group) < 1e-12
+
+
+def test_benchmark_model_runs_with_missing_values():
+    df = fake(400)
+    df.loc[::7, "amount"] = np.nan
+    X, y = df.drop(columns=["credit_risk"]), df["credit_risk"]
+    assert samples.train_benchmark(X, y, exclude=("age",))(X).shape == (400,)
+    assert samples.train(X, y, exclude=("age",))(X).shape == (400,)

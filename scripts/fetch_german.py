@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from probatio.data import parse_german  # noqa: E402
+from modelaudit.data import parse_german  # noqa: E402
 
 URL = "https://archive.ics.uci.edu/static/public/144/statlog+german+credit+data.zip"
 

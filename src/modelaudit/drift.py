@@ -1,9 +1,10 @@
 """입력 분포가 바뀌었는지 본다(PSI).
 
 PSI는 기준 표본과 새 표본의 구간별 비율 p, q로 sum((p - q) * ln(p / q))를 낸 값이다.
-업계 관행은 0.10 이상 주의, 0.25 이상 실패다. 그런데 표본이 작으면 분포가 그대로여도 PSI가 0이 아니다.
-분포가 같을 때 PSI / (1/n + 1/m)은 자유도 (구간 수 - 1)인 카이제곱 분포를 근사적으로 따른다.
-그래서 관행 기준에 더해 '우연으로 나올 수 있는 크기인가'를 함께 본다.
+업계 관행은 0.10 이상 주의, 0.25 이상 실패다. 이 기준 하나만 쓰면 표본 크기에 따라 양쪽으로 틀린다.
+표본이 작으면 분포가 그대로여도 0.10을 넘고, 표본이 크면 우연의 100배인 변화도 0.10에 못 미친다.
+그래서 두 가지를 따로 본다. 우연인가(분포가 같을 때 PSI / (1/n + 1/m)은 자유도 (구간 수 - 1)인 카이제곱 분포를 근사적으로 따른다),
+그리고 얼마나 큰가(PSI 크기). 우연이 아니지만 0.10보다 작으면 '관찰'로 적어 사람이 보게 한다.
 """
 from __future__ import annotations
 
@@ -49,10 +50,13 @@ class Drift:
     p_adjusted: float = float("nan")   # 여러 변수를 한꺼번에 본 것을 감안한 값(Holm)
 
     def status(self, adjusted: bool = True) -> str:
-        """adjusted=False면 업계 관행(PSI 크기만), True면 우연이 아닐 때만 올린다."""
-        if adjusted and not (self.p_adjusted < 0.05):
+        """adjusted=False면 업계 관행(PSI 크기만). True면 우연이 아닐 때만 올리고, 작아도 우연이 아니면 '관찰'로 남긴다."""
+        size = "실패" if self.psi >= FAIL else "주의" if self.psi >= WARN else "통과"
+        if not adjusted:
+            return size
+        if not (self.p_adjusted < 0.05):
             return "통과"
-        return "실패" if self.psi >= FAIL else "주의" if self.psi >= WARN else "통과"
+        return "관찰" if size == "통과" else size
 
 
 def psi(ref: pd.Series, cur: pd.Series, bins: int = 10, name: str = "") -> Drift:

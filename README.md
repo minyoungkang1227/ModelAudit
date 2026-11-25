@@ -1,4 +1,4 @@
-# Probatio (임시 이름)
+# ModelAudit
 
 금융회사가 쓰는 AI 모델을 내부를 보지 않고 검증하는 도구다. 모델은 "표를 받아 점수를 돌려주는 함수"로만 다룬다.
 외부에서 사 온 모델은 내부를 볼 수 없기 때문이다.
@@ -21,23 +21,23 @@ LLM 점검은 [Collatio](https://github.com/minyoungkang1227/collatio)가 맡고
 읽는 법은 세 가지다.
 
 - 큰 드리프트와 직접 차별은 잡는다. 10% 안팎의 작은 변화는 이 표본 크기(기준 600, 새 표본 400)에서 거의 못 잡는다.
-- **간접 차별은 아직 가려내지 못한다.** 아무것도 심지 않은 모델도 30번 중 13번 걸린다. 이 자료에서 25세 이하의 실제 우량 비율이 낮아서(58% 대 73%) 승인율이 원래 갈리기 때문이다. 심은 차별과 자료에 원래 있던 차이를 결과만 보고는 나눌 수 없다.
+- **결과 지표만으로는 간접 차별을 가려내지 못한다.** 아무것도 심지 않은 모델도 30번 중 13번 걸린다. 이 자료에서 25세 이하의 실제 우량 비율이 낮아서(58% 대 73%) 승인율이 원래 갈리기 때문이다. 심은 차별과 자료에 원래 있던 차이를 결과만 보고는 나눌 수 없다.
 - 새 표본이 100건이면 PSI 관행 기준(0.10)은 아무 변화가 없어도 95%에서 경고를 낸다. 우연으로 나올 크기인지 함께 보면 7%로 줄지만, 진짜 변화를 잡는 힘도 같이 떨어진다.
 
-건수가 많은 Home Credit(약 30만 건)에서 두 가지가 더 나왔다.
+건수가 많은 Home Credit(약 30만 건)에서 두 가지 문제가 드러나 고쳤다.
 
-- 표본이 크면 PSI 관행 기준이 반대로 틀린다. 금액 1.1배는 우연의 100배 크기인데도 통과로 나온다.
-- 표본이 크면 간접 차별이 갈린다. 아무것도 심지 않은 모델의 승인율 비는 0.47~0.50, 가장 약하게 심은 경우는 0.42~0.44로 겹치지 않는다. 다만 심지 않은 모델부터 25세 이하를 절반만 승인한다.
+- PSI 관행 기준은 큰 표본에서 반대로 틀린다. 금액 1.1배는 우연의 100배 크기인데도 통과로 나왔다. 우연 여부와 크기를 따로 보게 고친 뒤에는 8/8 잡는다.
+- 간접 차별은 기준 모델과 나란히 놓으면 갈린다. 검증자가 같은 자료로 따로 세운 모델과 비교하자, Home Credit에서 간접 차별을 8/8 잡고 심지 않은 모델은 0/8 걸렸다. German Credit처럼 집단이 76명뿐이면 여전히 약하다(5~17/30, 대조 3/30).
 
 ## 쓰는 법
 
 ```
 pip install -e .
 python scripts/fetch_german.py                      # UCI에서 자료를 받아 data/german.csv로 저장
-python -m probatio report  --data data/german.csv   # 표본 모델 검증 보고서 -> runs/report.md
-python -m probatio planted --data data/german.csv   # 문제를 심고 잡는지 세기 -> runs/planted.md
+python -m modelaudit report  --data data/german.csv   # 표본 모델 검증 보고서 -> runs/report.md
+python -m modelaudit planted --data data/german.csv   # 문제를 심고 잡는지 세기 -> runs/planted.md
 python scripts/prep_home_credit.py 받은폴더/application_train.csv
-python -m probatio planted --data data/home_credit.csv --preset home-age --seeds 10
+python -m modelaudit planted --data data/home_credit.csv --preset home-age --seeds 10
 pytest
 ```
 
@@ -46,7 +46,7 @@ pytest
 | 파일 | 하는 일 |
 |---|---|
 | `drift.py` | 변수별 PSI, 우연 여부 검정(카이제곱 근사), 여러 변수 보정(Holm) |
-| `fairness.py` | 승인율 비, 기회 격차, 바꿔 넣기 |
+| `fairness.py` | 승인율 비, 기회 격차, 바꿔 넣기, 기준 모델 비교 |
 | `samples.py` | 검증 대상 표본 모델, 심는 문제 |
 | `planted.py` | 심고 세는 실험 |
 | `report.py` | 판정과 규제 항목을 묶은 보고서 |
