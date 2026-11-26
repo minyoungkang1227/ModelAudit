@@ -3,8 +3,8 @@
 금융회사가 쓰는 AI 모델을 내부를 보지 않고 검증하는 도구다. 모델은 "표를 받아 점수를 돌려주는 함수"로만 다룬다.
 외부에서 사 온 모델은 내부를 볼 수 없기 때문이다.
 
-지금 되는 것은 모델 성능 유지, 강건성, 드리프트, 공정성 점검과 검증 보고서다. 설명가능성과 LLM 점검은 아직 없다.
-LLM 점검은 [Collatio](https://github.com/minyoungkang1227/collatio)가 맡고, 여기서는 불러다 쓸 예정이다.
+지금 되는 것은 모델 성능 유지, 강건성, 드리프트, 공정성, 설명가능성 점검과 검증 보고서다.
+LLM 점검은 [Collatio](https://github.com/minyoungkang1227/collatio)가 하고, 여기서는 그 결과를 읽어 같은 틀의 보고서로 적는다.
 
 ## 결과 (2026-11-25, German Credit 1,000건, 30회 반복)
 
@@ -32,6 +32,9 @@ LLM 점검은 [Collatio](https://github.com/minyoungkang1227/collatio)가 맡고
 강건성 점검도 같은 방식으로 쟀다. 금액이 1% 달라질 때 결과가 뒤집히도록 만든 모델을 두 자료에서 전부 잡았고(30/30, 8/8), 로지스틱 표본 모델은 한 번도 걸리지 않았다.
 다만 아무것도 심지 않은 부스팅 모델이 Home Credit에서 '주의'로 걸린다(뒤집힘 3.2%). 나무 모델의 원래 성질이라 기준을 모델 종류에 따라 읽어야 한다.
 
+설명가능성은 모델이 내놓는 거절 사유를 점검한다. 사유의 20%를 거짓으로 바꾼 경우를 두 자료에서 29/30, 8/8 잡았고 정직한 사유는 1/30, 0/8 걸렸다.
+다만 주의 기준을 결과를 보고 80%에서 90%로 올린 뒤의 숫자다.
+
 ## 쓰는 법
 
 ```
@@ -41,6 +44,7 @@ python -m modelaudit report  --data data/german.csv   # 표본 모델 검증 보
 python -m modelaudit planted --data data/german.csv   # 문제를 심고 잡는지 세기 -> runs/planted.md
 python scripts/prep_home_credit.py 받은폴더/application_train.csv
 python -m modelaudit planted --data data/home_credit.csv --preset home-age --seeds 10
+python -m modelaudit llm --collatio collatio.json     # Collatio 결과를 보고서로 -> runs/llm_report.md
 pytest
 ```
 
@@ -53,6 +57,8 @@ pytest
 | `samples.py` | 검증 대상 표본 모델, 심는 문제 |
 | `planted.py` | 심고 세는 실험 |
 | `robust.py` | 입력을 1% 바꿨을 때 승인·거절이 뒤집히는 비율 |
+| `explain.py` | 거절 사유의 충실도와 일관성 |
+| `llm.py` | Collatio 결과를 읽어 원칙·영역별 판정으로 바꿈 |
 | `perf.py` | 새 표본에서 구별력(AUC)이 유지되는지 |
 | `report.py` | 신뢰성 원칙 네 영역별 판정과 위험등급을 적은 보고서 |
 
@@ -61,5 +67,6 @@ pytest
 보고서는 금융위 「금융분야 인공지능 가이드라인」의 신뢰성 원칙 네 영역(모델 성능 관리, 데이터 품질, 공정성·편향성, 설명가능성)별로 판정을 낸다.
 대출 심사는 금감원 AI RMF에서 위험점수와 무관하게 고위험으로 분류되므로, 그 등급에 요구되는 통제도 함께 적는다.
 검사하지 않은 영역은 통과로 치지 않고 따로 적는다. 위험점수 자체는 내지 않는다.
+LLM 보고서는 같은 틀에 보안성 원칙(프롬프트 인젝션)이 더해진다.
 
 두 문서의 원문은 구하지 못했고 보도자료와 해설을 근거로 했다. 확인한 것과 해석한 것의 구분은 [docs/mapping.md](docs/mapping.md)에 있다.

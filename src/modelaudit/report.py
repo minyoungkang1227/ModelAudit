@@ -37,12 +37,12 @@ def grade(score: float | None, high_impact: bool) -> tuple[str, str, str]:
 
 
 def build(title: str, drifts: list[drift.Drift], fair: list, notes: list[str] | None = None, *,
-          perf=None, robustness: list | None = None, use: str = "", high_impact: bool = False, risk_score: float | None = None) -> str:
+          perf=None, robustness: list | None = None, explained=None, use: str = "", high_impact: bool = False, risk_score: float | None = None) -> str:
     areas = {
         "모델 성능 관리": overall(([perf.status] if perf is not None else []) + [r.status for r in robustness or []]),
         "데이터 품질": overall([d.status() for d in drifts]),
         "공정성·편향성": overall([f.status for f in fair]),
-        "설명가능성": NOT_DONE,
+        "설명가능성": explained.status if explained is not None and explained.n else NOT_DONE,
     }
     g, why, control = grade(risk_score, high_impact)
     verdict = overall(list(areas.values()))
@@ -57,7 +57,7 @@ def build(title: str, drifts: list[drift.Drift], fair: list, notes: list[str] | 
              f"| 모델 성능 관리 | {areas['모델 성능 관리']} | 새 표본에서의 구별력(AUC) 유지, 입력 1% 변화에 대한 안정성 |",
              f"| 데이터 품질 | {areas['데이터 품질']} | 입력·점수 분포 변화(PSI) |",
              f"| 공정성·편향성 | {areas['공정성·편향성']} | 승인율 비, 기회 격차, 바꿔 넣기, 기준 모델 비교 |",
-             f"| 설명가능성 | {areas['설명가능성']} | 아직 만들지 않음 |", "",
+             f"| 설명가능성 | {areas['설명가능성']} | 거절 사유의 충실도와 일관성 |", "",
              "이 도구가 보지 않는 것: 합법성, 신의성실, 보안성 원칙과 거버넌스. 위험점수의 나머지 부분은 회사가 따로 평가해야 한다.", ""]
     if perf is not None:
         lines += ["## 3. 모델 성능", "", "| 기준 표본 AUC | 새 표본 AUC | 하락 | 하락의 95% 구간 | 판정 |", "|---|---|---|---|---|",
@@ -84,8 +84,13 @@ def build(title: str, drifts: list[drift.Drift], fair: list, notes: list[str] | 
             lines.append(f"| {f.name} | 비 {f.ratio:.2f}, p {f.p_value:.3f}. {rates} | {f.status} |")
         else:
             lines.append(f"| 바꿔 넣기({f.column}) | 결과가 바뀐 비율 {f.changed:.1%}, 점수 변화 평균 {f.mean_shift:.4f} | {f.status} |")
+    if explained is not None and explained.n:
+        lines += ["", "## 6. 설명가능성", "", f"거절된 사람 {explained.n}명의 거절 사유를 점검했다.", "",
+                  "| 점검 | 값 | 판정 |", "|---|---|---|",
+                  f"| 충실도 | 말한 사유가 실제 영향 상위 3개 안에 든 비율 {explained.fidelity:.1%} (아무 변수나 말하면 {explained.chance:.1%}) | {explained.fidelity_status} |",
+                  f"| 일관성 | 입력을 1% 안에서 흔들어도 사유가 그대로인 비율 {explained.consistency:.1%} | {explained.consistency_status} |"]
     if notes:
-        lines += ["", "## 6. 읽을 때 주의", ""] + [f"- {n}" for n in notes]
+        lines += ["", "## 7. 읽을 때 주의", ""] + [f"- {n}" for n in notes]
     return "\n".join(lines) + "\n"
 
 
@@ -95,3 +100,24 @@ def trial_table(summary: pd.DataFrame, by: str) -> str:
     head = "| 심은 것 | 세기 | " + " | ".join(wide.columns) + " |"
     rows = [f"| {k} | {l} | " + " | ".join(wide.loc[(k, l)]) + " |" for k, l in wide.index]
     return "\n".join([head, "|---" * (len(wide.columns) + 2) + "|"] + rows) + "\n"
+
+
+def build_llm(checks: list, mock: bool, source: str, use: str = "공시를 읽고 답하는 LLM (업무 보조)") -> str:
+    """Collatio 결과를 같은 틀로 적는다. 판정은 원칙·영역별로 가장 나쁜 것을 올린다."""
+    areas: dict[str, list[str]] = {}
+    for c in checks:
+        areas.setdefault(c.area, []).append(c.status)
+    verdict = overall([c.status for c in checks])
+    missing = [c.name for c in checks if c.status == NOT_DONE]
+    lines = ["# 검증 보고서: LLM (Collatio 결과)", ""]
+    if mock:
+        lines += ["**모의 실행 결과다. 아래 숫자는 실제 모델과 무관하다.**", ""]
+    lines += ["## 1. 대상", "", "| 항목 | 내용 |", "|---|---|", f"| 용도 | {use} |", f"| 근거 파일 | {source} |",
+              "| 위험등급 | 산정 안 함. 용도와 회사의 위험점수에 따라 정해진다 |", "",
+              "## 2. 검증 의견", "", f"종합 판정: **{verdict}**" + (f" (검사하지 않은 것: {', '.join(missing)})" if missing else ""), "",
+              "| 원칙·영역 | 판정 |", "|---|---|"]
+    lines += [f"| {a} | {overall(s)} |" for a, s in areas.items()]
+    lines += ["", "## 3. 점검별 결과", "", "| 원칙·영역 | 점검 | 값 | 판정 |", "|---|---|---|---|"]
+    lines += [f"| {c.area} | {c.name} | {c.value} | {c.status} |" for c in checks]
+    lines += ["", "판정 기준 숫자는 이 도구가 정한 값이다. 점검 자체와 그 한계는 Collatio 저장소의 문서를 따른다."]
+    return "\n".join(lines) + "\n"

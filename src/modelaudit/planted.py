@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from . import drift, fairness, robust, samples
+from . import drift, explain, fairness, robust, samples
 
 
 @dataclass
@@ -120,6 +120,23 @@ def robustness_trial(df: pd.DataFrame, s: Setup, seeds: int = 30, levels=(0.2, 0
             hit = [r for r in res if planted_col is None or r.column == planted_col]
             worst = max(hit, key=lambda r: r.flipped)
             rows.append(dict(kind=kind, level=level, check="뒤집힘", seed=seed, flagged=worst.status != "통과", flipped=worst.flipped))
+    return pd.DataFrame(rows)
+
+
+def explain_trial(df: pd.DataFrame, s: Setup, seeds: int = 30, shares=(0.2, 0.5, 1.0)) -> pd.DataFrame:
+    rows = []
+    for seed in range(seeds):
+        rng = np.random.default_rng(seed)
+        train, test = _split(df, s.ref_share, rng)
+        Xtr, Xte = train.drop(columns=[s.label]), test.drop(columns=[s.label])
+        model, honest = samples.train_explained(Xtr, train[s.label], s.exclude)
+        cut = samples.cutoff_for(model(Xtr), s.approve_share)
+        used = [c for c in Xtr.columns if c not in s.exclude]
+        cases = [("대조", "없음", honest)] + [("거짓 사유", sh, samples.lying(honest, used, sh, seed)) for sh in shares]
+        for kind, level, explainer in cases:
+            e = explain.check(model, explainer, Xte, cut, Xtr, seed=seed)
+            rows.append(dict(kind=kind, level=level, check="충실도", seed=seed, flagged=e.fidelity_status != "통과", value=e.fidelity))
+            rows.append(dict(kind=kind, level=level, check="일관성", seed=seed, flagged=e.consistency_status != "통과", value=e.consistency))
     return pd.DataFrame(rows)
 
 

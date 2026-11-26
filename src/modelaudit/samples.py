@@ -32,6 +32,44 @@ def train(df: pd.DataFrame, y, exclude: tuple[str, ...] = ()) -> Model:
     return lambda X: pipe.predict_proba(X[cols])[:, 1]
 
 
+def train_explained(df: pd.DataFrame, y, exclude: tuple[str, ...] = ()):
+    """표본 모델과 그 모델이 내놓는 거절 사유. 외부 공급자가 점수와 함께 사유를 주는 상황을 흉내 낸다.
+    사유는 로지스틱 회귀의 변수별 기여(계수 x (값 - 평균))를 원래 열 단위로 합쳐, 점수를 가장 많이 깎은 열이다."""
+    cols = [c for c in df.columns if c not in exclude]
+    num = [c for c in cols if pd.api.types.is_numeric_dtype(df[c])]
+    cat = [c for c in cols if c not in num]
+    pre = ColumnTransformer([
+        ("n", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), num),
+        ("c", make_pipeline(SimpleImputer(strategy="constant", fill_value="없음"), OneHotEncoder(handle_unknown="ignore")), cat),
+    ], sparse_threshold=0)
+    Z = pre.fit_transform(df[cols])
+    lr = LogisticRegression(max_iter=2000).fit(Z, np.asarray(y))
+    sizes = [1] * len(num) + ([len(c) for c in pre.named_transformers_["c"].steps[-1][1].categories_] if cat else [])
+    owner = np.repeat(np.arange(len(sizes)), sizes)      # 변환된 열이 원래 어느 열에서 왔는가
+    names, mean, coef = np.array(num + cat, dtype=object), Z.mean(axis=0), lr.coef_[0]
+
+    def model(X: pd.DataFrame) -> np.ndarray:
+        return lr.predict_proba(pre.transform(X[cols]))[:, 1]
+
+    def explainer(X: pd.DataFrame) -> np.ndarray:
+        contrib = (pre.transform(X[cols]) - mean) * coef
+        by_column = np.column_stack([contrib[:, owner == k].sum(axis=1) for k in range(len(sizes))])
+        return names[by_column.argmin(axis=1)]
+
+    return model, explainer
+
+
+def lying(explainer, columns: list[str], share: float, seed: int = 0):
+    """거짓 사유: 사람의 share만큼은 진짜 사유 대신 아무 변수나 말한다. 같은 사람에게는 늘 같은 거짓을 말한다."""
+    def told(X: pd.DataFrame) -> np.ndarray:
+        r = np.asarray(explainer(X), dtype=object).copy()
+        rng = np.random.default_rng(seed)
+        lie = rng.random(len(r)) < share
+        r[lie] = rng.choice(np.array(columns, dtype=object), int(lie.sum()))
+        return r
+    return told
+
+
 def train_benchmark(df: pd.DataFrame, y, exclude: tuple[str, ...] = ()) -> Model:
     """검증자가 따로 세우는 기준 모델. 표본 모델과 종류가 다른 것(부스팅)을 써서 같은 모델끼리 비교가 되지 않게 한다."""
     cols = [c for c in df.columns if c not in exclude]

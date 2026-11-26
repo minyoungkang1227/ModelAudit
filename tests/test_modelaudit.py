@@ -2,7 +2,9 @@
 import numpy as np
 import pandas as pd
 
-from modelaudit import data, drift, fairness, perf, planted, report, robust, samples
+import json
+
+from modelaudit import data, drift, explain, fairness, llm, perf, planted, report, robust, samples
 from modelaudit.__main__ import main
 
 
@@ -94,7 +96,7 @@ def test_report_and_commands_run_end_to_end(tmp_path):
     assert main(["report", "--data", str(tmp_path / "d.csv"), "--out", str(tmp_path)]) == 0
     assert main(["planted", "--data", str(tmp_path / "d.csv"), "--out", str(tmp_path), "--seeds", "2"]) == 0
     text = (tmp_path / "report.md").read_text(encoding="utf-8")
-    assert "신뢰성" in text and "바꿔 넣기" in text and "고위험" in text and "설명가능성 | 검사 안 함" in text
+    assert "신뢰성" in text and "바꿔 넣기" in text and "고위험" in text and "## 6. 설명가능성" in text
     assert "간접 차별" in (tmp_path / "planted.md").read_text(encoding="utf-8")
     assert "불안정" in (tmp_path / "planted.md").read_text(encoding="utf-8") and "### 강건성" in text
     assert report.overall(["통과", "실패", "주의"]) == "실패"
@@ -165,3 +167,33 @@ def test_ripple_model_flips_on_one_percent_change_and_smooth_model_does_not():
     shaky = samples.with_ripple(model, "amount", float(np.std(model(X))))
     res = {r.column: r for r in robust.check(shaky, X, samples.cutoff_for(shaky(X)))}
     assert res["amount"].status == "실패" and res["duration"].status == "통과"
+
+
+def test_honest_reasons_pass_and_lying_reasons_fail():
+    df = fake(3000)
+    X, y = df.drop(columns=["credit_risk"]), df["credit_risk"]
+    model, honest = samples.train_explained(X, y, exclude=("age", "personal_status_sex", "foreign_worker"))
+    cut = samples.cutoff_for(model(X))
+    e = explain.check(model, honest, X, cut, X)
+    assert e.fidelity > 0.9 and e.consistency > 0.95 and e.status == "통과"
+    liar = samples.lying(honest, ["amount", "housing", "duration"], 1.0)
+    assert explain.check(model, liar, X, cut, X).fidelity < e.fidelity - 0.2
+    assert set(honest(X)) <= {"amount", "housing", "duration"}      # 모델에 넣지 않은 열은 사유로 나오지 않는다
+
+
+def test_collatio_result_is_mapped_and_missing_parts_are_not_counted_as_pass(tmp_path):
+    result = {"accuracy": {"m1": 0.99, "m2": 0.95}, "intra_model_dispersion": {"m1": 0.01, "m2": 0.02},
+              "H3_co_flip": {"paraphrase": {"flip_rate": 0.0}},
+              "injection": {"share_obeying_hidden_instruction": {"m1": 0.0, "m2": 0.0}}}
+    checks, mock = llm.from_collatio(result)
+    by = {c.name: c for c in checks}
+    assert not mock
+    assert by["정답률(가장 낮은 모델)"].status == "주의" and "m2" in by["정답률(가장 낮은 모델)"].value
+    assert by["숨긴 지시문을 따른 비율"].status == "통과"
+    assert by["조작된 입력에서 나온 오답을 가드가 잡은 비율"].status == "검사 안 함"
+    assert by["개인정보 노출"].status == "검사 안 함"
+    (tmp_path / "c.json").write_text("안내문\n" + json.dumps(result), encoding="utf-8")
+    assert main(["llm", "--collatio", str(tmp_path / "c.json"), "--out", str(tmp_path)]) == 0
+    text = (tmp_path / "llm_report.md").read_text(encoding="utf-8")
+    assert "종합 판정: **주의**" in text and "개인정보 노출" in text and "모의 실행" not in text
+    assert llm.from_collatio({"accuracy": {"a-large": 0.8}})[1] is True
