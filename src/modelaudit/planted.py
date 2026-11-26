@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from . import drift, fairness, samples
+from . import drift, fairness, robust, samples
 
 
 @dataclass
@@ -99,6 +99,27 @@ def fairness_trial(df: pd.DataFrame, s: Setup, seeds: int = 30,
             }
             for check, status in checks.items():
                 rows.append(dict(kind=kind, level=level, check=check, seed=seed, flagged=status != "통과", failed=status == "실패"))
+    return pd.DataFrame(rows)
+
+
+def robustness_trial(df: pd.DataFrame, s: Setup, seeds: int = 30, levels=(0.2, 0.5, 1.0)) -> pd.DataFrame:
+    """잔물결의 크기는 표본 모델 점수의 표준편차에 대한 배수다. 자료마다 점수 폭이 달라 절대값으로는 비교가 안 된다."""
+    rows = []
+    for seed in range(seeds):
+        rng = np.random.default_rng(seed)
+        train, test = _split(df, s.ref_share, rng)
+        Xtr, Xte = train.drop(columns=[s.label]), test.drop(columns=[s.label])
+        base = samples.train(Xtr, train[s.label], s.exclude)
+        bench = samples.train_benchmark(Xtr, train[s.label], s.exclude)
+        spread = float(np.std(base(Xtr)))
+        cases = [("대조(표본 모델)", "없음", base, None), ("대조(부스팅 모델)", "없음", bench, None)]
+        cases += [("불안정", lv, samples.with_ripple(base, s.numeric, lv * spread), s.numeric) for lv in levels]
+        for kind, level, model, planted_col in cases:
+            cut = samples.cutoff_for(model(Xtr), s.approve_share)
+            res = robust.check(model, Xte, cut)
+            hit = [r for r in res if planted_col is None or r.column == planted_col]
+            worst = max(hit, key=lambda r: r.flipped)
+            rows.append(dict(kind=kind, level=level, check="뒤집힘", seed=seed, flagged=worst.status != "통과", flipped=worst.flipped))
     return pd.DataFrame(rows)
 
 

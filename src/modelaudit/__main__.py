@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import drift, fairness, perf, planted, report, samples
+from . import drift, fairness, perf, planted, report, robust, samples
 
 
 def cmd_report(df, s, out, risk_score=None):
@@ -29,7 +29,7 @@ def cmd_report(df, s, out, risk_score=None):
              f"표본 모델은 {', '.join(s.exclude)}를 입력으로 받지 않는다."]
     notes.append("판정 기준 가운데 PSI 0.10·0.25와 승인율 비 0.8은 관행을 빌린 것이고, AUC 하락 0.03·0.05와 기준 모델 차이 2%p·5%p는 이 도구가 정한 값이다.")
     p = perf.check(ref[s.label], model(Xr), cur[s.label], model(Xc))
-    text = report.build("표본 모델(로지스틱 회귀)", drifts, fair, notes, perf=p, use=s.use, high_impact=s.high_impact, risk_score=risk_score)
+    text = report.build("표본 모델(로지스틱 회귀)", drifts, fair, notes, perf=p, robustness=robust.check(model, Xc, cut), use=s.use, high_impact=s.high_impact, risk_score=risk_score)
     (out / "report.md").write_text(text, encoding="utf-8")
     print(text)
 
@@ -39,9 +39,12 @@ def cmd_planted(df, s, out, seeds):
     f = planted.fairness_trial(df, s, seeds)
     d.to_csv(out / "planted_drift.csv", index=False)
     f.to_csv(out / "planted_fairness.csv", index=False)
+    r = planted.robustness_trial(df, s, seeds)
+    r.to_csv(out / "planted_robustness.csv", index=False)
     text = (f"# 심은 문제 점검 ({seeds}회 반복, 칸은 잡은 횟수/시도)\n\n## 드리프트\n\n"
             + report.trial_table(planted.summarize(d, "rule"), "rule")
-            + "\n## 공정성\n\n" + report.trial_table(planted.summarize(f, "check"), "check"))
+            + "\n## 공정성\n\n" + report.trial_table(planted.summarize(f, "check"), "check")
+            + "\n## 강건성\n\n" + report.trial_table(planted.summarize(r, "check"), "check"))
     (out / "planted.md").write_text(text, encoding="utf-8")
     print(text)
 

@@ -37,9 +37,9 @@ def grade(score: float | None, high_impact: bool) -> tuple[str, str, str]:
 
 
 def build(title: str, drifts: list[drift.Drift], fair: list, notes: list[str] | None = None, *,
-          perf=None, use: str = "", high_impact: bool = False, risk_score: float | None = None) -> str:
+          perf=None, robustness: list | None = None, use: str = "", high_impact: bool = False, risk_score: float | None = None) -> str:
     areas = {
-        "모델 성능 관리": perf.status if perf is not None else NOT_DONE,
+        "모델 성능 관리": overall(([perf.status] if perf is not None else []) + [r.status for r in robustness or []]),
         "데이터 품질": overall([d.status() for d in drifts]),
         "공정성·편향성": overall([f.status for f in fair]),
         "설명가능성": NOT_DONE,
@@ -54,7 +54,7 @@ def build(title: str, drifts: list[drift.Drift], fair: list, notes: list[str] | 
              "## 2. 검증 의견", "", f"종합 판정: **{verdict}**" + (f" (검사하지 않은 영역: {', '.join(missing)})" if missing else ""), "",
              "신뢰성 원칙(금융위 가이드라인 7대 원칙 중 ④)의 네 영역별 판정이다.", "",
              "| 영역 | 판정 | 근거가 된 점검 |", "|---|---|---|",
-             f"| 모델 성능 관리 | {areas['모델 성능 관리']} | 새 표본에서의 구별력(AUC) 유지 |",
+             f"| 모델 성능 관리 | {areas['모델 성능 관리']} | 새 표본에서의 구별력(AUC) 유지, 입력 1% 변화에 대한 안정성 |",
              f"| 데이터 품질 | {areas['데이터 품질']} | 입력·점수 분포 변화(PSI) |",
              f"| 공정성·편향성 | {areas['공정성·편향성']} | 승인율 비, 기회 격차, 바꿔 넣기, 기준 모델 비교 |",
              f"| 설명가능성 | {areas['설명가능성']} | 아직 만들지 않음 |", "",
@@ -62,6 +62,12 @@ def build(title: str, drifts: list[drift.Drift], fair: list, notes: list[str] | 
     if perf is not None:
         lines += ["## 3. 모델 성능", "", "| 기준 표본 AUC | 새 표본 AUC | 하락 | 하락의 95% 구간 | 판정 |", "|---|---|---|---|---|",
                   f"| {perf.auc_ref:.3f} | {perf.auc_cur:.3f} | {perf.drop:+.3f} | {perf.low:+.3f} ~ {perf.high:+.3f} | {perf.status} |", ""]
+    if robustness:
+        lines += ["### 강건성", "", "숫자 변수를 하나씩 1% 키우고 줄였을 때 승인·거절이 바뀐 사람의 비율이다. 2% 이상 주의, 5% 이상 실패. 아래는 큰 순서로 5개다.", "",
+                  "| 변수 | 뒤집힌 비율 | 점수 변화 평균 | 판정 |", "|---|---|---|---|"]
+        for r in sorted(robustness, key=lambda r: -r.flipped)[:5]:
+            lines.append(f"| {r.column} | {r.flipped:.2%} | {r.mean_shift:.4f} | {r.status} |")
+        lines.append("")
     flagged = [d for d in drifts if d.status() != "통과"]
     lines += ["## 4. 데이터 품질 (드리프트)", "",
               "PSI 0.10 이상 주의, 0.25 이상 실패. 우연으로 나올 수 있는 크기면 올리지 않는다(보정 p < 0.05). 우연은 아니지만 0.10 미만이면 관찰.", "",

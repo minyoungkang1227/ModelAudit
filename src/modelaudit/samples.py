@@ -65,6 +65,17 @@ def biased_labels(y, member, share: float, rng) -> np.ndarray:
     return y
 
 
+# ---- 심는 문제: 강건성 ----
+
+def with_ripple(model: Model, column: str, amplitude: float, step: float = 0.02) -> Model:
+    """불안정한 모델: column 값이 step(2%)만큼 변할 때마다 한 바퀴 도는 잔물결을 점수에 더한다.
+    값이 1% 달라지면 점수가 최대 amplitude의 두 배까지 움직인다. 과하게 맞춘 모델이나 촘촘한 규칙이 만드는 모양이다."""
+    def scored(X: pd.DataFrame) -> np.ndarray:
+        x = np.log(np.clip(X[column].to_numpy(float), 1e-9, None))
+        return model(X) + amplitude * np.sin(2 * np.pi * x / np.log1p(step))
+    return scored
+
+
 # ---- 심는 문제: 드리프트 ----
 
 def scaled(df: pd.DataFrame, column: str, factor: float) -> pd.DataFrame:

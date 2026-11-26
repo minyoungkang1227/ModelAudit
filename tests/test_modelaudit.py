@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from modelaudit import data, drift, fairness, perf, planted, report, samples
+from modelaudit import data, drift, fairness, perf, planted, report, robust, samples
 from modelaudit.__main__ import main
 
 
@@ -96,6 +96,7 @@ def test_report_and_commands_run_end_to_end(tmp_path):
     text = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "신뢰성" in text and "바꿔 넣기" in text and "고위험" in text and "설명가능성 | 검사 안 함" in text
     assert "간접 차별" in (tmp_path / "planted.md").read_text(encoding="utf-8")
+    assert "불안정" in (tmp_path / "planted.md").read_text(encoding="utf-8") and "### 강건성" in text
     assert report.overall(["통과", "실패", "주의"]) == "실패"
 
 
@@ -153,3 +154,14 @@ def test_performance_drop_is_flagged_only_when_real():
     assert perf.check(y[:2000], good[:2000], y[2000:], good[2000:], n_boot=100).status == "통과"
     worse = y[2000:] + rng.normal(0, 2.5, 2000)
     assert perf.check(y[:2000], good[:2000], y[2000:], worse, n_boot=100).status == "실패"
+
+
+def test_ripple_model_flips_on_one_percent_change_and_smooth_model_does_not():
+    df = fake(1500)
+    X, y = df.drop(columns=["credit_risk"]), df["credit_risk"]
+    model = samples.train(X, y, exclude=("age", "personal_status_sex", "foreign_worker"))
+    cut = samples.cutoff_for(model(X))
+    assert all(r.status == "통과" for r in robust.check(model, X, cut))
+    shaky = samples.with_ripple(model, "amount", float(np.std(model(X))))
+    res = {r.column: r for r in robust.check(shaky, X, samples.cutoff_for(shaky(X)))}
+    assert res["amount"].status == "실패" and res["duration"].status == "통과"
