@@ -197,3 +197,14 @@ def test_collatio_result_is_mapped_and_missing_parts_are_not_counted_as_pass(tmp
     text = (tmp_path / "llm_report.md").read_text(encoding="utf-8")
     assert "종합 판정: **주의**" in text and "개인정보 노출" in text and "모의 실행" not in text
     assert llm.from_collatio({"accuracy": {"a-large": 0.8}})[1] is True
+
+
+def test_reference_auc_is_measured_out_of_fold_so_overfitting_is_not_reported_as_decline():
+    from sklearn.metrics import roc_auc_score
+    df = fake(300, seed=3)
+    for i in range(25):                      # 뜻 없는 열을 많이 넣어 과하게 맞추게 한다
+        df[f"noise{i}"] = np.random.default_rng(i).normal(size=len(df))
+    X, y = df.drop(columns=["credit_risk"]), df["credit_risk"]
+    inside = roc_auc_score(y, samples.train(X, y)(X))
+    outside = roc_auc_score(y, samples.out_of_fold(X, y))
+    assert inside > outside + 0.05

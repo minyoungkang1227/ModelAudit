@@ -48,6 +48,12 @@ python -m modelaudit llm --collatio collatio.json     # Collatio 결과를 보�
 pytest
 ```
 
+`fetch_german.py`가 인증서 오류로 실패하면(2026-11-27에 UCI 사이트 인증서가 만료돼 있었다) UCI 사이트에서 `german.data`를 직접 받아 경로를 넣는다.
+
+```
+python scripts/fetch_german.py 받은_경로/german.data
+```
+
 ## 구성
 
 | 파일 | 하는 일 |

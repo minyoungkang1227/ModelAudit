@@ -82,6 +82,17 @@ def train_benchmark(df: pd.DataFrame, y, exclude: tuple[str, ...] = ()) -> Model
     return lambda X: pipe.predict_proba(X[cols])[:, 1]
 
 
+def out_of_fold(df: pd.DataFrame, y, exclude: tuple[str, ...] = (), k: int = 5, seed: int = 0) -> np.ndarray:
+    """기준 표본을 k조각으로 나눠, 각 조각의 점수를 그 조각을 빼고 배운 모델로 낸다.
+    모델이 배운 자료에서 잰 구별력은 부풀려져 있다. 새 표본과 견줄 기준은 배우지 않은 자료에서 잰 값이어야 한다."""
+    y = np.asarray(y)
+    fold = np.random.default_rng(seed).permutation(len(df)) % k
+    scores = np.empty(len(df))
+    for i in range(k):
+        scores[fold == i] = train(df[fold != i], y[fold != i], exclude)(df[fold == i])
+    return scores
+
+
 def cutoff_for(scores, approve_share: float = 0.7) -> float:
     """승인 비율이 approve_share가 되는 기준 점수."""
     return float(np.quantile(scores, 1 - approve_share))

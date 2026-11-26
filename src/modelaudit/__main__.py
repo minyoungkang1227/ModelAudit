@@ -30,7 +30,8 @@ def cmd_report(df, s, out, risk_score=None):
              "승인율 차이는 집단의 실제 부실률 차이에서도 생긴다. 기회 격차와 함께 읽는다.",
              f"표본 모델은 {', '.join(s.exclude)}를 입력으로 받지 않는다."]
     notes.append("판정 기준 가운데 PSI 0.10·0.25와 승인율 비 0.8은 관행을 빌린 것이고, AUC 하락 0.03·0.05와 기준 모델 차이 2%p·5%p는 이 도구가 정한 값이다.")
-    p = perf.check(ref[s.label], model(Xr), cur[s.label], model(Xc))
+    notes.append("기준 표본의 AUC는 모델이 배우지 않은 조각에서 잰 값이다(5조각 교차). 배운 자료에서 그대로 재면 부풀려져서 새 표본과 견줄 수 없다.")
+    p = perf.check(ref[s.label], samples.out_of_fold(Xr, ref[s.label], s.exclude), cur[s.label], model(Xc))
     text = report.build("표본 모델(로지스틱 회귀)", drifts, fair, notes, perf=p, robustness=robust.check(model, Xc, cut),
                         explained=explain.check(model, explainer, Xc, cut, Xr), use=s.use, high_impact=s.high_impact, risk_score=risk_score)
     (out / "report.md").write_text(text, encoding="utf-8")
