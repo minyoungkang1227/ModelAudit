@@ -45,6 +45,7 @@ python -m modelaudit planted --data data/german.csv   # 문제를 심고 잡는�
 python scripts/prep_home_credit.py 받은폴더/application_train.csv
 python -m modelaudit planted --data data/home_credit.csv --preset home-age --seeds 10
 python -m modelaudit llm --collatio collatio.json     # Collatio 결과를 보고서로 -> runs/llm_report.md
+python -m modelaudit selfcheck --repo ../collatio      # 저장소의 데이터 집계·보고 장치 점검(BCBS 239 10가지 징후)
 pytest
 ```
 
@@ -78,3 +79,7 @@ python scripts/fetch_german.py 받은_경로/german.data
 LLM 보고서는 같은 틀에 보안성 원칙(프롬프트 인젝션)이 더해진다.
 
 두 문서의 원문은 구하지 못했고 보도자료와 해설을 근거로 했다. 확인한 것과 해석한 것의 구분은 [docs/mapping.md](docs/mapping.md)에 있다.
+
+## 저장소 자체 점검 (selfcheck)
+
+FRM 교재(Reading 7)가 옮긴 BCBS 239의 '비효과적 집계·보고' 10가지 징후마다, 그 징후를 막는 장치의 흔적을 저장소의 코드·설정에서 찾는다. 문서에 단어만 적은 것은 세지 않는다(검수 기록과 기준일은 문서도 센다). 판정이 아니라 근거 파일 목록이다. 2026-11-27 본인 저장소 7개 결과는 [docs/selfcheck_2026-11-27.md](docs/selfcheck_2026-11-27.md).

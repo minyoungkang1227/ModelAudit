@@ -1,5 +1,6 @@
 """python -m modelaudit report --data data/german.csv   : 표본 모델 하나를 점검해 보고서를 낸다
-python -m modelaudit planted --data data/german.csv  : 문제를 심고 몇 개를 잡는지 센다"""
+python -m modelaudit planted --data data/german.csv  : 문제를 심고 몇 개를 잡는지 센다
+python -m modelaudit selfcheck --repo ../collatio     : 저장소의 데이터 집계·보고 장치를 BCBS 239 10가지 징후로 점검"""
 from __future__ import annotations
 
 import argparse
@@ -10,7 +11,7 @@ import pandas as pd
 
 import json
 
-from . import drift, explain, fairness, llm, perf, planted, provenance, report, robust, samples
+from . import drift, explain, fairness, llm, perf, planted, provenance, rdarr, report, robust, samples
 
 
 def cmd_report(df, s, out, risk_score=None, data_path=None):
@@ -59,7 +60,8 @@ def cmd_planted(df, s, out, seeds):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="modelaudit")
-    ap.add_argument("command", choices=["report", "planted", "llm"])
+    ap.add_argument("command", choices=["report", "planted", "llm", "selfcheck"])
+    ap.add_argument("--repo", help="점검할 저장소 폴더 (selfcheck)")
     ap.add_argument("--data", help="정답 열이 있는 CSV (report, planted)")
     ap.add_argument("--collatio", help="Collatio pipeline이 낸 결과 JSON (llm)")
     ap.add_argument("--out", default="runs")
@@ -69,6 +71,13 @@ def main(argv=None):
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    if a.command == "selfcheck":
+        if not a.repo:
+            ap.error("selfcheck에는 --repo가 필요하다")
+        text = rdarr.render(a.repo, rdarr.check(a.repo))
+        (out / f"selfcheck_{Path(a.repo).resolve().name}.md").write_text(text, encoding="utf-8")
+        print(text)
+        return 0
     if a.command == "llm":
         if not a.collatio:
             ap.error("llm에는 --collatio가 필요하다")

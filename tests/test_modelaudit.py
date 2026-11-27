@@ -220,3 +220,24 @@ def test_provenance_records_and_detects_change(tmp_path):
     assert status == "ok" and "받은 날" in text and "toy" in text
     csv.write_text("a,credit_risk\n1,1\n2,1\n", encoding="utf-8")   # 손으로 정답 하나를 바꾼다
     assert provenance.check(csv)[0] == "changed"
+
+
+def test_selfcheck_finds_guards_and_reports_missing(tmp_path):
+    from modelaudit import rdarr
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "main.py").write_text("print(1)\n", encoding="utf-8")
+    res = rdarr.check(empty)
+    assert sum(r.found for r in res) == 0 and len(res) == 10
+    rich = tmp_path / "rich"
+    (rich / ".github" / "workflows").mkdir(parents=True)
+    (rich / ".github" / "workflows" / "t.yml").write_text("on: push\n", encoding="utf-8")
+    (rich / "docs").mkdir()
+    (rich / "docs" / "data_dictionary.md").write_text("as_of 기준일\n", encoding="utf-8")
+    (rich / "check.py").write_text("def validate_item(x):\n    return x['as_of']\nTHRESHOLD = 0.1\nreviewer = 'kim'\n", encoding="utf-8")
+    (rich / "test_x.py").write_text("".join(f"def test_{i}():\n    pass\n" for i in range(12)), encoding="utf-8")
+    found = {r.item.no for r in rdarr.check(rich) if r.found}
+    assert {1, 2, 3, 4, 5, 9, 10} <= found and 6 not in found
+    text = rdarr.render(rich, rdarr.check(rich))
+    assert "판정이 아니다" in text and "흔적이 없는 것" in text
+    assert main(["selfcheck", "--repo", str(rich), "--out", str(tmp_path / "o")]) == 0
