@@ -8,8 +8,13 @@
 import sys
 from pathlib import Path
 
+import hashlib
+
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from modelaudit import provenance  # noqa: E402
 
 KEEP = ["AMT_INCOME_TOTAL", "AMT_CREDIT", "AMT_ANNUITY", "AMT_GOODS_PRICE", "CNT_CHILDREN", "REGION_RATING_CLIENT",
         "EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3", "DAYS_REGISTRATION", "DAYS_ID_PUBLISH", "DAYS_LAST_PHONE_CHANGE",
@@ -26,4 +31,8 @@ if __name__ == "__main__":
     out["credit_risk"] = 1 - raw["TARGET"]
     path = Path(__file__).resolve().parents[1] / "data" / "home_credit.csv"
     out.to_csv(path, index=False)
+    raw_sha = hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest()
+    provenance.write(path, source="Kaggle Home Credit Default Risk (application_train.csv)",
+                     url="https://www.kaggle.com/competitions/home-credit-default-risk/data", rows=len(out), raw_sha256=raw_sha,
+                     steps="성별 미상 제외, 20개 열만 남김, 근속·나이를 햇수로, TARGET 뒤집기")
     print(f"{len(out)}행, 우량 {int(out.credit_risk.sum())}건 -> {path}")

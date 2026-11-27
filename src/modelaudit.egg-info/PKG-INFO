@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: modelaudit
+Version: 0.1.0
+Summary: 금융 AI 모델 검증 툴킷: 모델 내부를 보지 않고 드리프트·공정성을 점검하고 보고서를 낸다
+Requires-Python: >=3.10
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scipy
+Requires-Dist: scikit-learn

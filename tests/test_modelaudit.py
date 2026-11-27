@@ -208,3 +208,15 @@ def test_reference_auc_is_measured_out_of_fold_so_overfitting_is_not_reported_as
     inside = roc_auc_score(y, samples.train(X, y)(X))
     outside = roc_auc_score(y, samples.out_of_fold(X, y))
     assert inside > outside + 0.05
+
+
+def test_provenance_records_and_detects_change(tmp_path):
+    from modelaudit import provenance
+    csv = tmp_path / "toy.csv"
+    csv.write_text("a,credit_risk\n1,1\n2,0\n", encoding="utf-8")
+    assert provenance.check(csv)[0] == "missing"
+    provenance.write(csv, source="toy", url="https://example.org", rows=2, steps="없음")
+    status, text = provenance.check(csv)
+    assert status == "ok" and "받은 날" in text and "toy" in text
+    csv.write_text("a,credit_risk\n1,1\n2,1\n", encoding="utf-8")   # 손으로 정답 하나를 바꾼다
+    assert provenance.check(csv)[0] == "changed"
